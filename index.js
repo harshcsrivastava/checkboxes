@@ -6,9 +6,12 @@ import express from "express";
 import { Server } from "socket.io";
 
 import { redis, publisher, subscriber } from "./redis-connection.js";
+import { error } from "node:console";
 
-const CHECKBOX_COUNT = 50;
-const CHECKBOX_STATE_KEY = "checkbox-state";
+const CHECKBOX_COUNT = 1000;
+const CHECKBOX_STATE_KEY = "checkbox-state-v3";
+
+const rateLimitingHashMap = new Map();
 
 async function main() {
     const PORT = process.env.PORT ?? 9000;
@@ -37,6 +40,23 @@ async function main() {
         console.log(`Socket connected: ${socket.id}`);
 
         socket.on("client:checkbox:change", async (data) => {
+            //user.sub : user id pe lagate hai OIDC pe
+            const lastOperationTime = await redis.get(`rate-limit:${socket.id}`)
+
+            if (lastOperationTime) {
+                const timeElapsed = Date.now() - lastOperationTime;
+                if (timeElapsed < 5.5 * 1000) {
+                    socket.emit("server:error", {
+                        error: `Wait for few seconds.`,
+                    });
+                    // update hoga still although prevent message kr rhe, and ek baar refresh hone ke baad dubara error nhi dikhayega
+                    // we have to give a cooldown
+
+                    return;
+                }
+            }
+            await redis.set(`rate-limit:${socket.id}`, Date.now());
+
             const existingState = await redis.get(CHECKBOX_STATE_KEY);
 
             if (existingState) {
@@ -70,10 +90,10 @@ async function main() {
         const existingState = await redis.get(CHECKBOX_STATE_KEY);
         if (existingState) {
             const remoteData = JSON.parse(existingState);
-            return res.json({checkboxes: remoteData})
+            return res.json({ checkboxes: remoteData });
         }
         return res.json({
-            checkboxes: new Array(CHECKBOX_COUNT).fill(false)
+            checkboxes: new Array(CHECKBOX_COUNT).fill(false),
         });
     });
 

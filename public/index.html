@@ -79,6 +79,49 @@
                 padding: 24px 28px 30px;
             }
 
+            .toast-host {
+                position: fixed;
+                top: 18px;
+                right: 18px;
+                z-index: 20;
+                display: grid;
+                gap: 10px;
+                width: min(100vw - 36px, 360px);
+            }
+
+            .toast {
+                padding: 14px 16px;
+                border-radius: 14px;
+                border: 1px solid transparent;
+                box-shadow: 0 14px 30px rgba(42, 33, 24, 0.18);
+                backdrop-filter: blur(8px);
+                color: #fffaf2;
+                font-size: 0.95rem;
+                line-height: 1.4;
+                animation: toast-in 180ms ease-out;
+            }
+
+            .toast--error {
+                background: linear-gradient(135deg, #b91c1c 0%, #ef4444 100%);
+                border-color: rgba(255, 255, 255, 0.18);
+            }
+
+            .toast--info {
+                background: linear-gradient(135deg, #b45309 0%, #f59e0b 100%);
+                border-color: rgba(255, 255, 255, 0.18);
+            }
+
+            @keyframes toast-in {
+                from {
+                    transform: translateY(-10px);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateY(0);
+                    opacity: 1;
+                }
+            }
+
             #container {
                 display: grid;
                 grid-template-columns: repeat(auto-fit, minmax(22px, 1fr));
@@ -192,11 +235,34 @@
             </section>
         </main>
 
+        <div
+            id="toast-host"
+            class="toast-host"
+            aria-live="polite"
+            aria-atomic="true"
+        ></div>
+
         <script src="/socket.io/socket.io.js"></script>
         <script>
             const socket = io();
             const container = document.getElementById("container");
+            const toastHost = document.getElementById("toast-host");
             const CHECKBOX_COUNT = 100;
+
+            function showNotification(message, type = "error") {
+                if (!message) {
+                    return;
+                }
+
+                const toast = document.createElement("div");
+                toast.className = `toast toast--${type}`;
+                toast.textContent = message;
+                toastHost.appendChild(toast);
+
+                window.setTimeout(() => {
+                    toast.remove();
+                }, 4000);
+            }
 
             // SOCKET Code
             socket.on("server:checkbox:change", (data) => {
@@ -208,8 +274,25 @@
                 }
             });
 
-            window.addEventListener("load", async () => {
-                const response = await fetch("/checkbox", { method: "GET" });
+            socket.on("server:error", (data) => {
+                showNotification(data?.error ?? "Something went wrong.");
+            });
+
+            // socket.on("connect_error", (error) => {
+            //     showNotification(error.message ?? "Socket connection failed.");
+            // });
+
+            // socket.on("disconnect", () => {
+            //     showNotification("Connection lost. Reconnecting...", "info");
+            // });
+
+            async function fetchStateFromServer(params) {
+                while (container.firstChild) {
+                    container.removeChild(container.firstChild);
+                }
+                const response = await fetch("/checkbox", {
+                    method: "GET",
+                });
                 const data = await response.json();
 
                 if (data && data.checkboxes) {
@@ -219,7 +302,6 @@
                         input.type = "checkbox";
                         input.id = `checkbox-${index}`;
                         input.checked = serverValue;
-                        // state ko emit kr rhe ho update to kro
 
                         input.addEventListener("change", (event) => {
                             const checked = event.target.checked;
@@ -228,11 +310,16 @@
                                 index,
                                 checked,
                             });
+                            fetchStateFromServer();
                         });
 
                         container.appendChild(input);
                     });
                 }
+            }
+            window.addEventListener("load", async () => {
+                // this creates a glitch due to re-render and it is a heavy operation
+                fetchStateFromServer();
             });
         </script>
     </body>
