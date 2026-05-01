@@ -5,6 +5,11 @@ import http from "node:http";
 import express from "express";
 import { Server } from "socket.io";
 
+const CHECKBOX_COUNT = 100;
+
+const state = {
+    checkbox: new Array(CHECKBOX_COUNT).fill(false),
+};
 async function main() {
     const PORT = process.env.PORT ?? 9000;
 
@@ -14,8 +19,6 @@ async function main() {
     const io = new Server();
     io.attach(server);
 
-    const CHECKBOX_COUNT = 100;
-
     // SOCKET IO HANDLER
     io.on("connection", (socket) => {
         console.log(`Socket connected: ${socket.id}`);
@@ -23,6 +26,8 @@ async function main() {
         socket.on("client:checkbox:change", (data) => {
             console.log(data);
             io.emit("server:checkbox:change", data);
+            //updating server state after refresh
+            state.checkbox[data.index] = data.checked;
         });
     });
 
@@ -33,7 +38,11 @@ async function main() {
         return res.json({ message: "Still Alive" });
     });
 
-    app.get("/checkbox", (req, res) => {});
+    app.get("/checkbox", (req, res) => {
+        return res.json({
+            checkboxes: state.checkbox,
+        });
+    });
 
     server.listen(PORT, () => {
         console.log(`Server running on http://localhost:${PORT}`);

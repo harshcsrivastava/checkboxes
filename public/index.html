@@ -208,18 +208,31 @@
                 }
             });
 
-            //
-            new Array(CHECKBOX_COUNT).fill(null).forEach((_, index) => {
-                const input = document.createElement("input");
-                input.type = "checkbox";
-                input.id = `checkbox-${index}`;
+            window.addEventListener("load", async () => {
+                const response = await fetch("/checkbox", { method: "GET" });
+                const data = await response.json();
 
-                input.addEventListener("change", (event) => {
-                    const checked = event.target.checked;
-                    console.log("checked", { index, checked });
-                    socket.emit("client:checkbox:change", { index, checked });
-                });
-                container.appendChild(input);
+                if (data && data.checkboxes) {
+                    data.checkboxes.forEach((serverValue, index) => {
+                        const input = document.createElement("input");
+
+                        input.type = "checkbox";
+                        input.id = `checkbox-${index}`;
+                        input.checked = serverValue;
+                        // state ko emit kr rhe ho update to kro
+
+                        input.addEventListener("change", (event) => {
+                            const checked = event.target.checked;
+                            console.log("checked", { index, checked });
+                            socket.emit("client:checkbox:change", {
+                                index,
+                                checked,
+                            });
+                        });
+
+                        container.appendChild(input);
+                    });
+                }
             });
         </script>
     </body>
